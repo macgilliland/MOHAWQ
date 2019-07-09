@@ -1,0 +1,766 @@
+function varargout = MOHAWQ(varargin)
+%Hair analysis package
+%
+%Copyright 2018-2019, University of North Carolina at Chapel Hill
+%Written by: Mac Gilliland
+%
+%MOHAWQ MATLAB code for MOHAWQ.fig
+%      MOHAWQ, by itself, creates a new MOHAWQ or raises the existing
+%      singleton*.
+%
+%      H = MOHAWQ returns the handle to a new MOHAWQ or the handle to
+%      the existing singleton*.
+%
+%      MOHAWQ('CALLBACK',hObject,eventData,handles,...) calls the local
+%      function named CALLBACK in MOHAWQ.M with the given input arguments.
+%
+%      MOHAWQ('Property','Value',...) creates a new MOHAWQ or raises the
+%      existing singleton*.  Starting from the left, property value pairs are
+%      applied to the GUI before MOHAWQ_OpeningFcn gets called.  An
+%      unrecognized property name or invalid value makes property application
+%      stop.  All inputs are passed to MOHAWQ_OpeningFcn via varargin.
+%
+%      *See GUI Options on GUIDE's Tools menu.  Choose "GUI allows only one
+%      instance to run (singleton)".
+%
+% See also: GUIDE, GUIDATA, GUIHANDLES
+
+% Edit the above text to modify the response to help MOHAWQ
+
+% Last Modified by GUIDE v2.5 14-Jun-2019 11:28:10
+
+% Begin initialization code - DO NOT EDIT
+gui_Singleton = 1;
+gui_State = struct('gui_Name',       mfilename, ...
+                   'gui_Singleton',  gui_Singleton, ...
+                   'gui_OpeningFcn', @MOHAWQ_OpeningFcn, ...
+                   'gui_OutputFcn',  @MOHAWQ_OutputFcn, ...
+                   'gui_LayoutFcn',  [] , ...
+                   'gui_Callback',   []);
+if nargin && ischar(varargin{1})
+    gui_State.gui_Callback = str2func(varargin{1});
+end
+
+if nargout
+    [varargout{1:nargout}] = gui_mainfcn(gui_State, varargin{:});
+else
+    gui_mainfcn(gui_State, varargin{:});
+end
+% End initialization code - DO NOT EDIT
+
+% --- Executes just before MOHAWQ is made visible.
+function MOHAWQ_OpeningFcn(hObject, eventdata, handles, varargin) %#ok<*INUSL>
+% This function has no output args, see OutputFcn.
+% hObject    handle to figure
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% varargin   command line arguments to MOHAWQ (see VARARGIN)
+
+% Choose default command line output for MOHAWQ
+handles.output = hObject;
+
+%Initialize Data Structure
+MHQ = initMHQ(handles);
+
+set(handles.instructionTextMOHAWQ, 'String', MHQ.InstructionsText);
+
+%Update empty heatmap
+MHQ = updateMainHeatmap(MHQ, handles);
+
+MHQguiObjectsOFF(handles,handles.loadExcelFile);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+% UIWAIT makes MOHAWQ wait for user response (see UIRESUME)
+% uiwait(handles.figure1);
+
+% --- Outputs from this function are returned to the command line.
+function varargout = MOHAWQ_OutputFcn(hObject, eventdata, handles) 
+% varargout  cell array for returning output args (see VARARGOUT);
+% hObject    handle to figure
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Get default command line output from handles structure
+varargout{1} = handles.output;
+
+
+% --- Executes on button press in loadExcelFile.
+function loadExcelFile_Callback(hObject, eventdata, handles) %#ok<*DEFNU>
+%retrieve MHQ data structure
+MHQ = getappdata(handles.output,'MHQ');
+MHQguiObjectsOFF(handles); %disable GUI objects
+
+%ask to unload data if ion data has been loaded
+if ~isempty(MHQ.ionData)
+    answer = questdlg('Are you sure you want to load a new file?','Load New File','Yes','No','No');
+    switch answer
+        case 'Yes'
+            MHQ = resetMHQdata(MHQ, handles);   %empty structure
+            updateMainHeatmap(MHQ, handles);    %update empty heatmap
+        case 'No'
+            MHQguiObjectsON(handles);
+            return
+    end
+end
+
+%search for excel file
+MHQ = loadExcelFile(MHQ, handles);
+
+
+if isempty(MHQ.ionData)
+    MHQguiObjectsOFF(handles,handles.loadExcelFile); %keep everything disabled if there is no data
+else
+    MHQguiObjectsON(handles); %enable objects
+end
+
+%set min and max for sliders
+MHQ = resetSliders(MHQ,handles);
+
+%update new image
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+
+% --- Executes on selection change in ionList.
+function ionList_Callback(hObject, eventdata, handles)
+% hObject    handle to ionList (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns ionList contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from ionList
+
+%retrieve MHQ data structure
+MHQ = getappdata(handles.output,'MHQ');
+
+%updatesliders
+MHQ = resetSliders(MHQ, handles);
+
+%update new image
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%updateMHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+
+% --- Executes on button press in newIon.
+function newIon_Callback(hObject, eventdata, handles)
+MHQguiObjectsOFF(handles); %disable GUI objects
+
+%launch GUI
+uiwait(MHQionCalculator(handles));
+
+MHQguiObjectsON(handles); %disable GUI objects
+
+% --- To be added in a future version of MOHAWQ
+% --- Executes on button press in loadimzML.
+function loadimzML_Callback(hObject, eventdata, handles)
+% hObject    handle to loadimzML (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+function spotSpacing_Callback(hObject, eventdata, handles)
+%retrieve MHQ data structure
+MHQ = getappdata(handles.output,'MHQ');
+
+spotSpacing = str2double(get(hObject, 'String'));
+
+%reset to previous value if nonnumeric
+if isnan(spotSpacing)
+    set(hObject,'String',num2str(MHQ.spotSpacing)); 
+else
+    %update value in structure
+    MHQ.spotSpacing = spotSpacing;
+end
+    
+%update new image
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%updateMHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+function lineSpacing_Callback(hObject, eventdata, handles)
+%retrieve MHQ data structure
+MHQ = getappdata(handles.output,'MHQ');
+
+lineSpacing = str2double(get(hObject, 'String'));
+
+%reset to previous value if nonnumeric
+if isnan(lineSpacing)
+    set(hObject,'String',num2str(MHQ.lineSpacing)); 
+else
+    %update value in structure
+    MHQ.lineSpacing = lineSpacing;
+end
+    
+%update new image
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+function maxScaleSlider_Callback(hObject, eventdata, handles)
+%retrieve MHQ data structure
+MHQ = getappdata(handles.output,'MHQ');
+
+val = get(hObject,'Value');
+MHQ.localMinScale = get(handles.minScaleSlider,'Value');
+
+%max must be greater than min
+if val > MHQ.localMinScale && val <= MHQ.maxScale
+    MHQ.localMaxScale = val;
+    set(hObject, 'Value', MHQ.localMaxScale);
+    
+    MHQ = updateMainHeatmap(MHQ, handles);
+else
+    set(hObject, 'Value', MHQ.localMaxScale);
+end
+
+set(handles.maxScaleSliderValue,'String',num2str(MHQ.localMaxScale, MHQ.abundanceScalePrecision));
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+function minScaleSlider_Callback(hObject, eventdata, handles)
+%retrieve MHQ structure
+MHQ = getappdata(handles.output,'MHQ');
+
+val = get(hObject,'Value');
+MHQ.localMaxScale = get(handles.maxScaleSlider,'Value');
+
+%min must be less than max
+if val < MHQ.localMaxScale && val >= MHQ.minScale
+    MHQ.localMinScale = val;
+    set(hObject, 'Value', MHQ.localMinScale);
+    
+    MHQ = updateMainHeatmap(MHQ, handles);
+else
+    set(hObject, 'Value', MHQ.localMinScale);
+end
+
+set(handles.minScaleSliderValue,'String',num2str(MHQ.localMinScale, MHQ.abundanceScalePrecision));
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+function minScaleSliderValue_Callback(hObject, eventdata, handles)
+%retrieve MHQ structure
+MHQ = getappdata(handles.output,'MHQ');
+
+val = str2double(get(hObject,'String'));
+
+if isnan(val)
+    set(hObject,'String',num2str(MHQ.localMinScale, MHQ.abundanceScalePrecision));
+    return %reset value and exit
+end
+
+MHQ.localMaxScale = get(handles.maxScaleSlider,'Value');
+
+%min must be less than max
+if val < MHQ.localMaxScale && val >= MHQ.minScale
+    MHQ.localMinScale = val;
+    set(handles.minScaleSlider, 'Value', MHQ.localMinScale);
+    
+    MHQ = updateMainHeatmap(MHQ, handles);
+else
+    set(hObject, 'String', num2str(MHQ.localMinScale, MHQ.abundanceScalePrecision));
+end
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+function maxScaleSliderValue_Callback(hObject, eventdata, handles) 
+%retrive MHQ data structure
+MHQ = getappdata(handles.output,'MHQ');
+
+val = str2double(get(hObject,'String'));
+
+if isnan(val)
+    set(hObject,'String',num2str(MHQ.localMaxScale, MHQ.abundanceScalePrecision));
+    return %reset value and exit
+end
+
+MHQ.localMinScale = get(handles.minScaleSlider,'Value');
+
+%max must be greater than min
+if val > MHQ.localMinScale  && val <= MHQ.maxScale
+    MHQ.localMaxScale = val;
+    set(handles.maxScaleSlider, 'Value', MHQ.localMaxScale);
+    
+    MHQ = updateMainHeatmap(MHQ, handles);
+else
+    set(hObject, 'String', num2str(MHQ.localMaxScale, MHQ.abundanceScalePrecision));
+end
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+% --- Executes on button press in createROI.
+function createROI_Callback(hObject, eventdata, handles)
+% hObject    handle to createROI (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+%retrieve MHQ structure
+MHQ = getappdata(handles.output,'MHQ');
+ROIList = MHQ.ROIListStrings;
+
+%set active axes
+axes(handles.heatmap_axes);
+
+%draw ROI and collect data
+[roi, roiX, roiY] = roipoly;
+
+ROILabel = strcat('ROI_',num2str(MHQ.ROICount));
+MHQ.ROICount = MHQ.ROICount + 1;
+
+
+if any(strcmp('ROI List', ROIList))
+    MHQ.ROIListStrings = {ROILabel};
+else
+    idx = max(size(ROIList));
+    MHQ.ROIListStrings{idx+1} = ROILabel; 
+end
+
+set(handles.ROIList, 'String', MHQ.ROIListStrings, 'Value', numel(MHQ.ROIListStrings));
+
+%write ROI parameters to structure
+MHQ.ROIList.(ROILabel).img = roi;
+MHQ.ROIList.(ROILabel).ROIX = roiX;
+MHQ.ROIList.(ROILabel).ROIY = roiY;
+
+%save scale to allow for rescaling ROIs later
+MHQ.ROIList.(ROILabel).ROIxScale = MHQ.spotSpacing;
+MHQ.ROIList.(ROILabel).ROIyScale = MHQ.lineSpacing;
+
+%update heatmap
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+
+% --- Executes on button press in deleteROI.
+function deleteROI_Callback(hObject, eventdata, handles)
+%retrieve MHQ structure
+MHQ = getappdata(handles.output,'MHQ'); 
+
+%If empty list, don't do anything (maybe remove with enable/disable functionality)
+if any(strcmp('ROI List', MHQ.ROIListStrings))
+    return
+end
+
+%get list index and value from currently selected ROI
+listIdx = get(handles.ROIList,'Value');
+ROILabel = MHQ.ROIListStrings{listIdx};
+
+%Remove value from list and corresponding data
+MHQ.ROIListStrings(listIdx) = [];
+MHQ.ROIList = rmfield(MHQ.ROIList,ROILabel);
+
+%if last value deleted, replace with ROI List
+if isempty(MHQ.ROIListStrings)
+    MHQ.ROIListStrings = {'ROI List'};
+    set(handles.ROIList,'Value',1);
+elseif listIdx == 1 %deleted first value in list
+    set(handles.ROIList,'Value',1);
+else %deleted any other value in list
+    set(handles.ROIList,'Value',listIdx - 1);
+end
+
+set(handles.ROIList,'String', MHQ.ROIListStrings);
+
+%updateheatmap
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+
+function moveUp_Callback(hObject, eventdata, handles)
+%retrieve MHQ structure
+MHQ = getappdata(handles.output,'MHQ'); 
+
+%If only one element, don't do anything
+if numel(MHQ.ROIListStrings) < 2
+    return
+end
+
+ROIIdx = get(handles.ROIList,'Value');
+
+%If first element selected, don't do anything
+if ROIIdx == 1
+    return
+end
+
+selectedROI = MHQ.ROIListStrings{ROIIdx};
+%reorder list, special case for second element
+if ROIIdx == 2
+    newList = {selectedROI, MHQ.ROIListStrings{1:end}};
+    newList(ROIIdx + 1) = [];
+else
+    newList = {MHQ.ROIListStrings{1:ROIIdx-2}, selectedROI, MHQ.ROIListStrings{ROIIdx-1:end}};
+    newList(ROIIdx+1) = [];
+end
+
+%update list
+MHQ.ROIListStrings = newList;
+set(handles.ROIList, 'String', MHQ.ROIListStrings, 'Value', ROIIdx - 1);
+
+%updateheatmap
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+
+% --- Executes on button press in moveDown.
+function moveDown_Callback(hObject, eventdata, handles)
+%retrieve MHQ structure
+MHQ = getappdata(handles.output,'MHQ'); 
+
+%If only one element, don't do anything
+if numel(MHQ.ROIListStrings) < 2
+    return
+end
+
+ROIIdx = get(handles.ROIList,'Value');
+
+%If last element selected, don't do anything
+if ROIIdx == numel(MHQ.ROIListStrings)
+    return
+end
+
+selectedROI = MHQ.ROIListStrings{ROIIdx};
+
+%reoder list, special case for second to last
+if ROIIdx == numel(MHQ.ROIListStrings)-1
+    newList = {MHQ.ROIListStrings{1:end}, selectedROI};
+    newList(ROIIdx) = [];
+else
+    newList = {MHQ.ROIListStrings{1:ROIIdx+1}, selectedROI, MHQ.ROIListStrings{ROIIdx+2:end}};
+    newList(ROIIdx) = [];
+end
+
+%update list
+MHQ.ROIListStrings = newList;
+set(handles.ROIList, 'String', MHQ.ROIListStrings, 'Value', ROIIdx + 1);
+
+%updateheatmap
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+
+% --- Executes on selection change in ROIList.
+function ROIList_Callback(hObject, eventdata, handles)
+%retrieve MHQ structure
+MHQ = getappdata(handles.output,'MHQ');
+
+%update heatmap
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+function displayROI_Callback(hObject, eventdata, handles)
+%retrieve MHQ structure
+MHQ = getappdata(handles.output,'MHQ');
+
+%update heatmap
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+% --- Executes on button press in deleteIon.
+function deleteIon_Callback(hObject, eventdata, handles)
+
+MHQ = getappdata(handles.output,'MHQ'); %get main structure
+MHQguiObjectsOFF(handles); %disable interaction
+
+%last ion cannot be deleted
+if max(size(MHQ.ionLabelStr)) == 1
+    uiwait(msgbox('The last ion map cannot be deleted.','Last ion map','modal'));
+    MHQguiObjectsON(handles); %enable interaction and quit
+    return
+end
+
+%ask if you want to delete ion data
+answer = questdlg({'This will permanently delete the selected ion map.','Are you sure you want delete the current ion map?'},'Delete Ion Map','Yes','No','No');
+switch answer
+    case 'Yes'
+        ionIdx = get(handles.ionList,'Value');
+        ionSelected = MHQ.ionLabelStr{ionIdx};
+        
+        %delete ion string and data
+        MHQ.ionLabelStr(ionIdx) = [];
+        MHQ.ionData = rmfield(MHQ.ionData, ionSelected);
+        
+        set(handles.ionList,'String',MHQ.ionLabelStr);
+        
+        %case for first value deleted
+        if ionIdx == 1
+            set(handles.ionList,'Value',1);
+        else
+            set(handles.ionList,'Value',ionIdx - 1);
+        end
+               
+    case 'No'
+        MHQguiObjectsON(handles); %enable interaction and quit
+        return
+end
+
+MHQguiObjectsON(handles); %enable interaction
+
+%update heatmap
+MHQ = resetSliders(MHQ,handles);
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+
+% --- Executes on button press in launchProfileTool.
+function launchProfileTool_Callback(hObject, eventdata, handles)
+
+%handle case with No ROIs
+MHQ = getappdata(handles.output,'MHQ');
+ROIList = MHQ.ROIListStrings;
+
+if any(strcmp('ROI List', ROIList))
+    msgbox('At least one ROI must be drawn to generate profiles.', 'No ROI', 'error');
+    return
+end
+
+%disable buttons
+MHQguiObjectsOFF(handles); %disable GUI objects
+
+%launch app
+try
+    uiwait(MHQalign(handles));
+catch
+end
+
+MHQguiObjectsON(handles); %enable GUI objects
+
+
+
+
+%%%---Creation Functions for GUI Elements---%%%
+%%%-----------------------------------------%%%
+function ionList_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function spotSpacing_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function lineSpacing_CreateFcn(hObject, eventdata, handles)
+
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function maxScaleSlider_CreateFcn(hObject, eventdata, handles)
+if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor',[.9 .9 .9]);
+end
+
+function minScaleSlider_CreateFcn(hObject, eventdata, handles)
+if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor',[.9 .9 .9]);
+end
+
+function minScaleSliderValue_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function maxScaleSliderValue_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function ROIList_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+% --- Executes during object creation, after setting all properties.
+function polyOrder_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+%set options for polynomial order
+set(hObject,'String', {'1'; '2'; '3'; '4'; '5'});
+
+% --- Executes during object creation, after setting all properties.
+function roiWidth_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+%%%---End Creation Functions-----------------%%%
+%%%------------------------------------------%%%
+
+
+% --- Executes on button press in detectROIs.
+function detectROIs_Callback(hObject, eventdata, handles)
+% hObject    handle to detectROIs (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+%handle case with No ROIs
+MHQ = getappdata(handles.output,'MHQ');
+listValue = get(handles.ionList, 'Value');
+ionSelected = MHQ.ionLabelStr{listValue};
+
+ionImg = MHQ.ionData.(ionSelected).img;
+
+threshold = max(max(ionImg))* 0.05; %establish threshold as 5% of max image intensity (user input?)
+imgBinary = imbinarize(ionImg, threshold); %generate binary image with threshold
+
+%clean up binary image before finding hairs and fitting
+imgBinary = bwmorph(imgBinary,'spur',Inf); 
+se = strel('disk',50); %structure element for tophat filter
+imgBinary = imtophat(imgBinary,se);
+imgBinary = bwmorph(imgBinary,'clean',Inf);
+%imgBinary = bwmorph(imgBinary,'hbreak',Inf);
+
+mask = bwlabel(imgBinary); %find hairs
+
+numHairs = max(max(mask));
+
+numX = size(mask,2);
+halfWidth = MHQ.ROIFitLineWidth/2;
+
+for i = 1: numHairs
+    ROILabel = strcat('ROI_',num2str(MHQ.ROICount));
+    
+    [y, x] = find(mask == i);
+    try
+        p = polyfit(x, y, MHQ.ROIPolyOrder);
+    catch
+        errordlg('One or more of the polynomial fits failed. Try adjusting the order or manually draw ROIs.','Fit Failed');
+        break
+    end
+    
+    xx = linspace(1, numX, numX);
+    [normX1, normY1, normX2, normY2, roiX, roiY] = deal([]);
+    
+    for j = 1:numX - 1
+        dx = xx(j+1) - xx(j);
+        dy = polyval(p,xx(j+1)) - polyval(p,xx(j));
+        
+        newX = halfWidth*(-dy) + xx(j);
+        newY = halfWidth*(dx) + polyval(p,xx(j));
+        newX2 = halfWidth*(dy) + xx(j);
+        newY2 = halfWidth*(-dx) + polyval(p, xx(j));
+        
+        normX1 = [normX1 newX];
+        normY1 = [normY1 newY];
+        normX2 = [normX2 newX2];
+        normY2 = [normY2 newY2];
+        
+    end
+    
+    %assign ROI values and generate binary image
+    roiX = [normX1 flip(normX2)];
+    roiY = [normY1 flip(normY2)];
+    %cut data in half to help with ROI fitting
+    MHQ.ROIList.(ROILabel).ROIX = [roiX roiX(1)];
+    MHQ.ROIList.(ROILabel).ROIY = [roiY roiY(1)];
+    
+    try
+        MHQ.ROIList.(ROILabel).img = roipoly(ionImg, MHQ.ROIList.(ROILabel).ROIX, MHQ.ROIList.(ROILabel).ROIY);
+    catch
+        uiwait(errordlg('Too many data points. Try a lower order polynomial or manually draw ROIs.'));
+        break
+    end
+       
+    %save scale to allow for rescaling ROIs later
+    MHQ.ROIList.(ROILabel).ROIxScale = 1000;
+    MHQ.ROIList.(ROILabel).ROIyScale = 1000;
+
+    if any(strcmp('ROI List', MHQ.ROIListStrings))
+        MHQ.ROIListStrings = {ROILabel};
+    else
+        idx = max(size(MHQ.ROIListStrings));
+        MHQ.ROIListStrings{idx+1} = ROILabel; 
+    end
+    
+    set(handles.ROIList, 'String', MHQ.ROIListStrings, 'Value', numel(MHQ.ROIListStrings));
+    
+    MHQ.ROICount = MHQ.ROICount + 1;
+end
+
+
+
+%update heatmap
+MHQ = updateMainHeatmap(MHQ, handles);
+
+%update MHQ and handles data structure
+setappdata(handles.output,'MHQ',MHQ);
+guidata(hObject, handles);
+
+
+
+function roiWidth_Callback(hObject, eventdata, handles)
+%get main data structure
+MHQ = getappdata(handles.output,'MHQ');
+
+%get value
+val = str2double(get(hObject,'String'));
+
+%reset if Nan or below 0
+if isnan(val) || val <= 0
+   set(hObject, 'String', num2str(MHQ.ROIFitLineWidth));
+else
+   MHQ.ROIFitLineWidth = val;
+   set(hObject,'String', num2str(MHQ.ROIFitLineWidth));
+end
+
+%save data
+setappdata(handles.output,'MHQ',MHQ)
+guidata(hObject, handles)
+
+
+
+
+% --- Executes on selection change in polyOrder.
+function polyOrder_Callback(hObject, eventdata, handles)
+%get main data structure
+MHQ = getappdata(handles.output,'MHQ');
+
+val = get(hObject, 'Value');
+
+%set poly order as value, values are in order starting at 1
+MHQ.ROIPolyOrder = val;
+
+%save data
+setappdata(handles.output,'MHQ',MHQ)
+guidata(hObject, handles)
